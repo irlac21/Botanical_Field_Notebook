@@ -9,11 +9,19 @@ import matplotlib.pyplot as plt
 # DATABASE
 # =====================================================
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+# Racine du projet Botanical_Field_Notebook
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 
+# Chemin vers la base SQLite
 DB_FILE = PROJECT_DIR / "Database" / "botanical.db"
 
-conn = sqlite3.connect(DB_FILE)
+# Vérification existence base
+if not DB_FILE.exists():
+    st.error(f"Database not found: {DB_FILE}")
+    st.stop()
+
+# Connexion SQLite
+conn = sqlite3.connect(str(DB_FILE))
 
 
 # =====================================================
