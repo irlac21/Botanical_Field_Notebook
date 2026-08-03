@@ -22,6 +22,8 @@ SELECT
 
 field_notes.*,
 
+projects.project_name,
+
 species.scientificName,
 species.family,
 species.genus,
@@ -30,7 +32,6 @@ locations.country,
 locations.province,
 locations.territory,
 locations.locality,
-
 
 sampling_units.unitName AS samplingUnitName
 
@@ -50,6 +51,14 @@ LEFT JOIN sampling_units
 ON field_notes.samplingUnitID = sampling_units.unitID
 
 
+LEFT JOIN projects
+ON field_notes.projectID = projects.project_id
+
+
+WHERE field_notes.deleted = 0
+AND projects.deleted = 0
+
+
 ORDER BY field_notes.date DESC
 
 """
@@ -63,8 +72,128 @@ df = pd.read_sql(
 
 conn.close()
 
+# =====================================================
+# PROJECT FILTER
+# =====================================================
+
+conn = sqlite3.connect(DB_FILE)
+
+projects_df = pd.read_sql(
+    """
+    SELECT
+        project_id,
+        project_name
+    FROM projects
+    WHERE deleted = 0
+    ORDER BY project_name
+    """,
+    conn
+)
+
+conn.close()
 
 
+if len(projects_df) > 0:
+
+    project_options = [
+        "All projects"
+    ] + projects_df["project_name"].tolist()
+
+
+    selected_project = st.selectbox(
+        "📁 Project",
+        project_options
+    )
+
+
+    if selected_project != "All projects":
+
+
+        project_row = projects_df[
+            projects_df["project_name"] == selected_project
+        ]
+
+
+        project_id = int(
+            project_row["project_id"].iloc[0]
+        )
+
+
+        df = df[
+            df["projectID"] == project_id
+        ]
+
+
+        st.info(
+            f"Selected project: {selected_project}"
+        )
+
+
+        if st.button(
+            "📦 Archive selected project"
+        ):
+
+
+            conn = sqlite3.connect(DB_FILE)
+
+            cur = conn.cursor()
+
+
+            # Archive project
+
+            cur.execute(
+                """
+                UPDATE projects
+                SET deleted = 1
+                WHERE project_id = ?
+                """,
+                (project_id,)
+            )
+
+
+            project_changes = cur.rowcount
+
+
+            # Archive associated field records
+
+            cur.execute(
+                """
+                UPDATE field_notes
+                SET deleted = 1,
+                    updatedAt = datetime('now')
+                WHERE projectID = ?
+                """,
+                (project_id,)
+            )
+
+
+            records_changes = cur.rowcount
+
+
+            conn.commit()
+
+            conn.close()
+
+
+            st.success(
+                f"""
+                Project archived successfully.
+
+                Project updated: {project_changes}
+
+                Field records archived: {records_changes}
+                """
+            )
+
+
+            st.rerun()
+
+
+else:
+
+    st.warning(
+        "No active projects available."
+    )
 # =====================================================
 # PAGE
 # =====================================================
@@ -572,189 +701,290 @@ st.write(
 # =====================================================
 
 
-for index, row in df.iterrows():
+# =====================================================
+# GROUP OBSERVATIONS BY PROJECT
+# =====================================================
+
+for project_name, project_df in df.groupby(
+    "project_name",
+    dropna=False
+):
+
+
+    project_label = (
+        project_name
+        if pd.notna(project_name)
+        else "No project"
+    )
+
 
     with st.expander(
-        f"📓 {row['scientificName'] if pd.notna(row['scientificName']) else 'Unknown species'} | {row['date']} | {row['observationType']}"
+        f"📁 {project_label} ({len(project_df)} observations)"
     ):
 
 
-        st.markdown("## 🌿 Taxon")
+        for index, row in project_df.iterrows():
 
 
-        st.write(
-            f"**Species:** {row['scientificName'] if pd.notna(row['scientificName']) else 'Not identified'}"
-        )
-
-
-        st.write(
-            f"**Family:** {row['family'] if pd.notna(row['family']) else '-'}"
-        )
-
-
-        st.write(
-            f"**Genus:** {row['genus'] if pd.notna(row['genus']) else '-'}"
-        )
-
-
-
-        st.markdown("## 👤 Collector")
-
-
-        st.write(
-            f"**Observer:** {row['observer']}"
-        )
-
-
-        st.write(
-            f"**Collection number:** {row['collectorNumber']}"
-        )
-
-
-
-        st.markdown("## 📍 Locality")
-        st.write(
-            f"""
-            Latitude: {row['latitude']}  
-            Longitude: {row['longitude']}  
-            Altitude: {row['altitude']} m
-            """
-        )
-
-
-        st.write(
-            f"""
-            Country: {row['country']}  
-            Province: {row['province']}  
-            Territory: {row['territory']}  
-            Locality: {row['locality']}
-            """
-        )
-
-
-
-        st.markdown("## 🌱 Ecology")
-
-
-        st.write(
-            f"**Habitat:** {row['habitat']}"
-        )
-
-
-        st.write(
-            f"**Phenology:** {row['phenology']}"
-        )
-
-
-
-        st.markdown("## 📏 Measurements")
-
-
-        col1, col2, col3 = st.columns(3)
-
-
-        with col1:
-
-            st.metric(
-                "Individuals",
-                int(row["individualCount"])
-                if pd.notna(row["individualCount"])
-                else 0
+            species_label = (
+                row["scientificName"]
+                if pd.notna(row["scientificName"])
+                else "Unknown species"
             )
 
 
-        with col2:
-
-            st.metric(
-                "Height (m)",
-                row["height"]
-                if pd.notna(row["height"])
-                else 0
-            )
+            with st.expander(
+                f"📓 {species_label} | {row['date']} | {row['observationType']}"
+            ):
 
 
-        with col3:
+                # =====================================================
+                # TAXON
+                # =====================================================
 
-            st.metric(
-                "DBH (cm)",
-                row["dbh"]
-                if pd.notna(row["dbh"])
-                else 0
-            )
+                st.markdown("## 🌿 Taxon")
 
 
-
-        st.markdown("## 📝 Notes")
-
-
-        if "updatedAt" in row and pd.notna(row["updatedAt"]):
-
-            st.caption(
-                f"Last update: {row['updatedAt']}"
-            )
+                st.write(
+                    f"**Species:** {species_label}"
+                )
 
 
-        st.write(
-            "**Description:**"
-        )
+                st.write(
+                    f"**Family:** {row['family'] if pd.notna(row['family']) else '-'}"
+                )
 
 
-        st.write(
-            row["description"]
-            if pd.notna(row["description"])
-            else "-"
-        )
-
-
-        st.write(
-            "**Remarks:**"
-        )
-
-
-        st.write(
-            row["remarks"]
-            if pd.notna(row["remarks"])
-            else "-"
-        )
+                st.write(
+                    f"**Genus:** {row['genus'] if pd.notna(row['genus']) else '-'}"
+                )
 
 
 
-        st.markdown("## 🧭 Sampling")
+                # =====================================================
+                # PROJECT
+                # =====================================================
+
+                st.markdown("## 📁 Project")
 
 
-        st.write(
-            f"**Type:** {row['observationType']}"
-        )
+                st.write(
+                    f"**Project:** {project_label}"
+                )
 
 
-        if row["observationType"] == "Plot":
 
-            st.write(
-                f"Sampling unit: {row['samplingUnitName'] if pd.notna(row['samplingUnitName']) else '-'}"
-            )
+                # =====================================================
+                # COLLECTOR
+                # =====================================================
 
-
-        if row["observationType"] == "Transect":
-
-            st.write(
-                f"Transect ID: {row['transectID']}"
-            )
+                st.markdown("## 👤 Collector")
 
 
-        st.markdown("---")
+                st.write(
+                    f"**Observer:** {row['observer']}"
+                )
 
 
+                st.write(
+                    f"**Collection number:** {row['collectorNumber']}"
+                )
+
+
+
+                # =====================================================
+                # LOCALITY
+                # =====================================================
+
+                st.markdown("## 📍 Locality")
+
+
+                st.write(
+                    f"""
+Latitude: {row['latitude']}
+Longitude: {row['longitude']}
+Altitude: {row['altitude']} m
+"""
+                )
+
+
+                st.write(
+                    f"""
+Country: {row['country']}
+Province: {row['province']}
+Territory: {row['territory']}
+Locality: {row['locality']}
+"""
+                )
+
+
+
+                # =====================================================
+                # ECOLOGY
+                # =====================================================
+
+                st.markdown("## 🌱 Ecology")
+
+
+                st.write(
+                    f"**Habitat:** {row['habitat']}"
+                )
+
+
+                st.write(
+                    f"**Phenology:** {row['phenology']}"
+                )
+
+
+
+                # =====================================================
+                # MEASUREMENTS
+                # =====================================================
+
+                st.markdown("## 📏 Measurements")
+
+
+                col1, col2, col3 = st.columns(3)
+
+
+                with col1:
+
+                    st.metric(
+                        "Individuals",
+                        int(row["individualCount"])
+                        if pd.notna(row["individualCount"])
+                        else 0
+                    )
+
+
+                with col2:
+
+                    st.metric(
+                        "Height (m)",
+                        row["height"]
+                        if pd.notna(row["height"])
+                        else 0
+                    )
+
+
+                with col3:
+
+                    st.metric(
+                        "DBH (cm)",
+                        row["dbh"]
+                        if pd.notna(row["dbh"])
+                        else 0
+                    )
+
+
+
+                # =====================================================
+                # NOTES
+                # =====================================================
+
+                st.markdown("## 📝 Notes")
+
+
+                if "updatedAt" in row and pd.notna(row["updatedAt"]):
+
+                    st.caption(
+                        f"Last update: {row['updatedAt']}"
+                    )
+
+
+                st.write("**Description:**")
+
+
+                st.write(
+                    row["description"]
+                    if pd.notna(row["description"])
+                    else "-"
+                )
+
+
+                st.write("**Remarks:**")
+
+
+                st.write(
+                    row["remarks"]
+                    if pd.notna(row["remarks"])
+                    else "-"
+                )
+
+
+
+                # =====================================================
+                # SAMPLING
+                # =====================================================
+
+                st.markdown("## 🧭 Sampling")
+
+
+                st.write(
+                    f"**Type:** {row['observationType']}"
+                )
+
+
+                if row["observationType"] == "Plot":
+
+                    st.write(
+                        f"Sampling unit: {row['samplingUnitName'] if pd.notna(row['samplingUnitName']) else '-'}"
+                    )
+
+
+                if row["observationType"] == "Transect":
+
+                    st.write(
+                        f"Transect ID: {row['transectID']}"
+                    )
+
+
+                st.markdown("---")
         # =====================================================
-        # EDIT RECORD
+        # ACTION BUTTONS
         # =====================================================
 
-        if st.button(
-            "✏️ Edit this record",
-            key=f"edit_{row['noteID']}"
-        ):
+        col_edit, col_trash = st.columns(2)
 
-            st.session_state["edit_noteID"] = int(row["noteID"])
-            st.rerun()
+        with col_edit:
+
+            if st.button(
+                "✏️ Edit this record",
+                key=f"edit_{row['noteID']}"
+            ):
+
+                st.session_state["edit_noteID"] = int(row["noteID"])
+                st.rerun()
+
+        with col_trash:
+
+            if st.button(
+                "🗑️ Move to Trash",
+                key=f"trash_{row['noteID']}"
+            ):
+
+                conn = sqlite3.connect(DB_FILE)
+
+                cur = conn.cursor()
+
+                cur.execute(
+                    """
+                    UPDATE field_notes
+                    SET deleted = 1,
+                        updatedAt = datetime('now')
+                    WHERE noteID = ?
+                    """,
+                    (int(row["noteID"]),)
+                )
+
+                conn.commit()
+                conn.close()
+
+                st.success(
+                    "Observation moved to the Trash."
+                )
+
+                st.rerun()
 
 # =====================================================
 # DOWNLOAD CSV
@@ -767,4 +997,38 @@ st.download_button(
     csv,
     file_name="botanical_field_records.csv",
     mime="text/csv"
+)
+# =====================================================
+# DOWNLOAD EXCEL
+# =====================================================
+
+excel_file = "botanical_field_records.xlsx"
+
+from io import BytesIO
+
+
+output = BytesIO()
+
+
+with pd.ExcelWriter(
+    output,
+    engine="openpyxl"
+) as writer:
+
+    df.to_excel(
+        writer,
+        index=False,
+        sheet_name="Field records"
+    )
+
+
+output.seek(0)
+
+
+
+st.download_button(
+    "📊 Download Excel",
+    output,
+    file_name=excel_file,
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )

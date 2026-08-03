@@ -12,16 +12,26 @@ import matplotlib.pyplot as plt
 # Racine du projet Botanical_Field_Notebook
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
+
 # Chemin vers la base SQLite
 DB_FILE = PROJECT_DIR / "Database" / "botanical.db"
 
+
+
 # Vérification existence base
 if not DB_FILE.exists():
-    st.error(f"Database not found: {DB_FILE}")
+
+    st.error(
+        f"Database not found: {DB_FILE}"
+    )
+
     st.stop()
 
+
 # Connexion SQLite
-conn = sqlite3.connect(str(DB_FILE))
+conn = sqlite3.connect(
+    str(DB_FILE)
+)
 
 
 # =====================================================
@@ -74,62 +84,184 @@ st.title("📊 Botanical Statistics")
 
 st.markdown(
 """
-Explore biodiversity patterns from the botanical database.
+Explore biodiversity patterns by project.
 """
 )
 
 
+
 # =====================================================
-# GENERAL INDICATORS
+# PROJECT SELECTION
 # =====================================================
 
-st.subheader("Overview")
+st.subheader("📁 Select project")
 
-# Première ligne
+
+active_projects = projects[
+    projects["deleted"] == 0
+]
+
+
+
+if len(active_projects) == 0:
+
+    st.warning(
+        "No active projects available."
+    )
+
+    st.stop()
+
+
+
+project_options = (
+    active_projects["project_name"]
+    .sort_values()
+    .tolist()
+)
+
+
+
+selected_project = st.selectbox(
+    "Choose a project",
+    project_options
+)
+
+
+
+selected_project_id = active_projects[
+    active_projects["project_name"] == selected_project
+]["project_id"].iloc[0]
+
+
+
+# =====================================================
+# LOAD SELECTED PROJECT RECORDS
+# =====================================================
+
+
+conn = sqlite3.connect(
+    str(DB_FILE)
+)
+
+
+project_records = pd.read_sql(
+    """
+
+    SELECT *
+
+    FROM field_notes
+
+    WHERE projectID = ?
+
+    AND deleted = 0
+
+    """,
+
+    conn,
+
+    params=(
+        int(selected_project_id),
+    )
+)
+
+
+conn.close()
+# =====================================================
+# PROJECT SPECIES
+# =====================================================
+
+project_taxa = project_records[
+    project_records["taxonID"].notna()
+]["taxonID"].unique()
+
+
+
+project_species = species[
+    species["taxonID"].isin(project_taxa)
+]
+
+
+
+# =====================================================
+# PROJECT OVERVIEW
+# =====================================================
+
+st.divider()
+
+
+st.subheader(
+    f"📁 {selected_project} overview"
+)
+
+
+
 col1, col2, col3, col4 = st.columns(4)
 
+
+
 col1.metric(
-    "🌿 Species",
-    species["species"].nunique()
+    "📑 Records",
+    len(project_records)
 )
+
+
 
 col2.metric(
-    "🌳 Genera",
-    species["genus"].nunique()
+    "Species",
+    project_species["species"].nunique()
 )
 
+
+
 col3.metric(
-    "🌼 Families",
-    species["family"].nunique()
+    "Families",
+    project_species["family"].nunique()
 )
+
+
 
 col4.metric(
-    "📑 Observations",
-    len(field_notes)
+    "Collectors",
+    project_records["observer"].nunique()
 )
 
-# Deuxième ligne
+
+
 col1, col2, col3, col4 = st.columns(4)
 
+
+
 col1.metric(
-    "👤 Collectors",
-    len(collectors)
-)
-
-col2.metric(
-    "📁 Projects",
-    len(projects)
-)
-
-col3.metric(
     "📍 Localities",
-    len(locations)
+    project_records["locationID"].nunique()
 )
 
-col4.metric(
-    "📦 Sampling Units",
-    len(sampling_units)
+
+
+col2.metric(
+    "Sampling units",
+    project_records["samplingUnitID"].nunique()
 )
+
+
+
+col3.metric(
+    "First observation",
+    project_records["date"].min()
+    if len(project_records) > 0
+    else "-"
+)
+
+
+
+col4.metric(
+    "Last observation",
+    project_records["date"].max()
+    if len(project_records) > 0
+    else "-"
+)
+
+
 
 st.divider()
 
@@ -137,106 +269,159 @@ st.divider()
 # OBSERVATION TYPES
 # =====================================================
 
-st.subheader("Observation Types")
+st.subheader("Observation Types in selected project")
 
-# Séparation des observations
-opportunistic = field_notes[
-    field_notes["samplingUnitID"].isna() &
-    field_notes["transectID"].isna()
-]
 
-plot = field_notes[
-    field_notes["samplingUnitID"].notna()
-]
+# Utiliser uniquement les observations du projet choisi
 
-transect = field_notes[
-    field_notes["transectID"].notna()
-]
+if len(project_records) > 0:
 
-col1, col2, col3 = st.columns(3)
 
-# =====================================================
-# OPPORTUNISTIC
-# =====================================================
+    opportunistic = project_records[
+        project_records["samplingUnitID"].isna()
+        &
+        project_records["transectID"].isna()
+    ]
 
-with col1:
 
-    st.markdown("### 🟢 Opportunistic")
+    plot = project_records[
+        project_records["samplingUnitID"].notna()
+    ]
 
-    st.metric(
-        "Observations",
-        len(opportunistic)
+
+    transect = project_records[
+        project_records["transectID"].notna()
+    ]
+
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+
+    # =====================================================
+    # OPPORTUNISTIC
+    # =====================================================
+
+    with col1:
+
+        st.markdown(
+            "### Opportunistic"
+        )
+
+
+        st.metric(
+            "Observations",
+            len(opportunistic)
+        )
+
+
+        st.metric(
+            "Species",
+            opportunistic["taxonID"].nunique()
+        )
+
+
+        st.metric(
+            "Individuals",
+            opportunistic["individualCount"]
+            .fillna(0)
+            .sum()
+        )
+
+
+
+    # =====================================================
+    # PLOTS
+    # =====================================================
+
+    with col2:
+
+        st.markdown(
+            "### Plot"
+        )
+
+
+        st.metric(
+            "Observations",
+            len(plot)
+        )
+
+
+        st.metric(
+            "Species",
+            plot["taxonID"].nunique()
+        )
+
+
+        st.metric(
+            "Individuals",
+            plot["individualCount"]
+            .fillna(0)
+            .sum()
+        )
+
+
+        st.metric(
+            "Mean DBH",
+            round(
+                plot["dbh"].mean(),
+                2
+            )
+            if plot["dbh"].notna().any()
+            else 0
+        )
+
+
+
+    # =====================================================
+    # TRANSECTS
+    # =====================================================
+
+    with col3:
+
+        st.markdown(
+            "### Transect"
+        )
+
+
+        st.metric(
+            "Observations",
+            len(transect)
+        )
+
+
+        st.metric(
+            "Species",
+            transect["taxonID"].nunique()
+        )
+
+
+        st.metric(
+            "Individuals",
+            transect["individualCount"]
+            .fillna(0)
+            .sum()
+        )
+
+
+        st.metric(
+            "Mean DBH",
+            round(
+                transect["dbh"].mean(),
+                2
+            )
+            if transect["dbh"].notna().any()
+            else 0
+        )
+
+
+else:
+
+    st.info(
+        "No observations available for this project."
     )
 
-    st.metric(
-        "Species",
-        opportunistic["taxonID"].nunique()
-    )
-
-    st.metric(
-        "Individuals",
-        opportunistic["individualCount"].fillna(0).sum()
-    )
-
-# =====================================================
-# PLOTS
-# =====================================================
-
-with col2:
-
-    st.markdown("### 🔵 Plot")
-
-    st.metric(
-        "Observations",
-        len(plot)
-    )
-
-    st.metric(
-        "Species",
-        plot["taxonID"].nunique()
-    )
-
-    st.metric(
-        "Individuals",
-        plot["individualCount"].fillna(0).sum()
-    )
-
-    st.metric(
-        "Mean DBH",
-        round(plot["dbh"].mean(), 2)
-        if plot["dbh"].notna().any()
-        else 0
-    )
-
-# =====================================================
-# TRANSECTS
-# =====================================================
-
-with col3:
-
-    st.markdown("### 🟠 Transect")
-
-    st.metric(
-        "Observations",
-        len(transect)
-    )
-
-    st.metric(
-        "Species",
-        transect["taxonID"].nunique()
-    )
-
-    st.metric(
-        "Individuals",
-        transect["individualCount"].fillna(0).sum()
-    )
-
-    st.metric(
-        "Mean DBH",
-        round(transect["dbh"].mean(), 2)
-        if transect["dbh"].notna().any()
-        else 0
-    )
 
 st.divider()
 
@@ -244,38 +429,104 @@ st.divider()
 # OBSERVATIONS BY TYPE
 # =====================================================
 
-st.subheader("Observations by Type")
-
-obs_type = pd.DataFrame({
-    "Type": ["Opportunistic", "Plot", "Transect"],
-    "Observations": [
-        len(opportunistic),
-        len(plot),
-        len(transect)
-    ]
-})
-
-fig, ax = plt.subplots(figsize=(6,4))
-
-ax.bar(
-    obs_type["Type"],
-    obs_type["Observations"]
+st.subheader(
+    "Observations by Type in selected project"
 )
 
-ax.set_xlabel("")
-ax.set_ylabel("Number of observations")
-ax.set_title("Observation types")
 
-for i, v in enumerate(obs_type["Observations"]):
-    ax.text(
-        i,
-        v,
-        str(v),
-        ha="center",
-        va="bottom"
+
+if len(project_records) > 0:
+
+
+    obs_type = pd.DataFrame(
+        {
+            "Type": [
+                "Opportunistic",
+                "Plot",
+                "Transect"
+            ],
+
+            "Observations": [
+
+                len(
+                    project_records[
+                        project_records["samplingUnitID"].isna()
+                        &
+                        project_records["transectID"].isna()
+                    ]
+                ),
+
+
+                len(
+                    project_records[
+                        project_records["samplingUnitID"].notna()
+                    ]
+                ),
+
+
+                len(
+                    project_records[
+                        project_records["transectID"].notna()
+                    ]
+                )
+            ]
+        }
     )
 
-st.pyplot(fig)
+
+
+    fig, ax = plt.subplots(
+        figsize=(6,4)
+    )
+
+
+    ax.bar(
+        obs_type["Type"],
+        obs_type["Observations"]
+    )
+
+
+    ax.set_xlabel(
+        ""
+    )
+
+
+    ax.set_ylabel(
+        "Number of observations"
+    )
+
+
+    ax.set_title(
+        f"Observation types - {selected_project}"
+    )
+
+
+
+    for i, v in enumerate(
+        obs_type["Observations"]
+    ):
+
+        ax.text(
+            i,
+            v,
+            str(v),
+            ha="center",
+            va="bottom"
+        )
+
+
+
+    st.pyplot(fig)
+
+
+
+else:
+
+
+    st.info(
+        "No observations available for this project."
+    )
+
 
 st.divider()
 
@@ -283,72 +534,230 @@ st.divider()
 # ORIGIN / ESTABLISHMENT STATUS
 # =====================================================
 
-st.subheader("Species establishment status")
-
-status_count = (
-    species["establishmentMeans"]
-    .fillna("Unknown")
-    .value_counts()
+st.subheader(
+    "Species establishment status in selected project"
 )
 
 
-fig, ax = plt.subplots()
 
-status_count.plot(
-    kind="bar",
-    ax=ax
-)
+if len(project_species) > 0:
 
-ax.set_xlabel("")
-ax.set_ylabel("Number of species")
 
-st.pyplot(fig)
+    status_count = (
+        project_species["establishmentMeans"]
+        .fillna("Unknown")
+        .value_counts()
+    )
+
+
+
+    fig, ax = plt.subplots(
+        figsize=(6,4)
+    )
+
+
+    status_count.plot(
+        kind="bar",
+        ax=ax
+    )
+
+
+    ax.set_xlabel(
+        ""
+    )
+
+
+    ax.set_ylabel(
+        "Number of species"
+    )
+
+
+    ax.set_title(
+        f"Establishment status - {selected_project}"
+    )
+
+
+    plt.xticks(
+        rotation=45,
+        ha="right"
+    )
+
+
+    st.pyplot(fig)
+
+
+
+else:
+
+
+    st.info(
+        "No identified species available for this project."
+    )
+
+
+st.divider()
 
 
 # =====================================================
 # FAMILY RICHNESS
 # =====================================================
 
-st.subheader("Species richness by family")
-
-family_count = (
-    species.groupby("family")["species"]
-    .nunique()
-    .sort_values(ascending=False)
-    .head(15)
+st.subheader(
+    "Species richness by family in selected project"
 )
 
 
-fig, ax = plt.subplots()
 
-family_count.plot(
-    kind="bar",
-    ax=ax
-)
+if len(project_species) > 0:
 
-ax.set_xlabel("")
-ax.set_ylabel("Species")
 
-st.pyplot(fig)
+    family_count = (
+        project_species
+        .groupby("family")["species"]
+        .nunique()
+        .sort_values(
+            ascending=False
+        )
+        .head(15)
+    )
+
+
+
+    fig, ax = plt.subplots(
+        figsize=(8,5)
+    )
+
+
+    family_count.plot(
+        kind="bar",
+        ax=ax
+    )
+
+
+    ax.set_xlabel(
+        ""
+    )
+
+
+    ax.set_ylabel(
+        "Number of species"
+    )
+
+
+    ax.set_title(
+        f"Top families - {selected_project}"
+    )
+
+
+    plt.xticks(
+        rotation=45,
+        ha="right"
+    )
+
+
+    st.pyplot(fig)
+
+
+
+else:
+
+
+    st.info(
+        "No identified species available for this project."
+    )
+
+
+st.divider()
 
 
 # =====================================================
 # MOST REPRESENTED GENERA
 # =====================================================
 
-st.subheader("Most represented genera")
-
-genus_count = (
-    species.groupby("genus")["species"]
-    .nunique()
-    .sort_values(ascending=False)
-    .head(15)
+st.subheader(
+    "Most represented genera in selected project"
 )
 
 
-st.dataframe(
-    genus_count.reset_index(
-        name="Species"
-    ),
-    hide_index=True
-)
+
+if len(project_species) > 0:
+
+
+    genus_count = (
+        project_species
+        .groupby("genus")["species"]
+        .nunique()
+        .sort_values(
+            ascending=False
+        )
+        .head(15)
+    )
+
+
+
+    # -------------------------------
+    # GRAPH
+    # -------------------------------
+
+    fig, ax = plt.subplots(
+        figsize=(8,5)
+    )
+
+
+    genus_count.plot(
+        kind="bar",
+        ax=ax
+    )
+
+
+    ax.set_xlabel(
+        ""
+    )
+
+
+    ax.set_ylabel(
+        "Number of species"
+    )
+
+
+    ax.set_title(
+        f"Top genera - {selected_project}"
+    )
+
+
+    plt.xticks(
+        rotation=45,
+        ha="right"
+    )
+
+
+    st.pyplot(fig)
+
+
+
+    # -------------------------------
+    # TABLE
+    # -------------------------------
+
+    st.markdown(
+        "### Genus summary"
+    )
+
+
+    st.dataframe(
+        genus_count
+        .reset_index(
+            name="Species"
+        ),
+        hide_index=True,
+        use_container_width=True
+    )
+
+
+
+else:
+
+
+    st.info(
+        "No identified species available for this project."
+    )

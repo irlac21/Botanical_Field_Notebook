@@ -1078,31 +1078,167 @@ if uploaded_photos:
                 caption=photo.name,
                 use_container_width=True
             )
+# =====================================================
+# PROJECT
+# =====================================================
+
+st.subheader("📁 Project")
+
+
+project_names = get_project_names()
+
+
+project_options = project_names + ["➕ Create new project"]
+
+
+project_choice = st.selectbox(
+    "Select project",
+    project_options
+)
+
+
+projectID = None
+
+
+# =====================================================
+# CREATE NEW PROJECT
+# =====================================================
+
+if project_choice == "➕ Create new project":
+
+
+    new_project_name = st.text_input(
+        "Project name",
+        placeholder="Example: Flora survey in Itombwe"
+    )
+
+
+    new_project_description = st.text_area(
+        "Project description",
+        placeholder="Describe the objectives of the project"
+    )
+
+
+    new_project_locality = st.text_input(
+        "Project locality",
+        placeholder="Example: Kahuzi-Biega National Park"
+    )
+
+
+    if st.button("💾 Save new project"):
+
+
+        if new_project_name.strip() == "":
+
+            st.error(
+                "Please enter a project name."
+            )
+
+            st.stop()
+
+
+        cur.execute(
+            """
+            INSERT INTO projects
+            (
+            project_name,
+            description,
+            locality
+            )
+            VALUES (?,?,?)
+            """,
+            (
+            new_project_name,
+            new_project_description,
+            new_project_locality
+            )
+        )
+
+
+        conn.commit()
+
+
+        st.success(
+            "Project created successfully."
+        )
+
+
+        st.rerun()
+
+
+
+# =====================================================
+# EXISTING PROJECT
+# =====================================================
+
+else:
+
+
+    cur.execute(
+        """
+        SELECT project_id
+        FROM projects
+        WHERE project_name=?
+        """,
+        (project_choice,)
+    )
+
+
+    project = cur.fetchone()
+
+
+    if project:
+
+        projectID = project[0]
 
 # =====================================================
 # SAVE
 # =====================================================
 
 if st.button("💾 Save observation"):
-    if habitat == "➕ Add new habitat":
-        st.error("Please save and select the new habitat before saving the observation.")
+
+    if projectID is None:
+
+        st.error(
+            "Please select a project."
+        )
+
         st.stop()
+
+
+    if habitat == "➕ Add new habitat":
+
+        st.error(
+            "Please save and select the new habitat before saving the observation."
+        )
+
+        st.stop()
+
 
     if observer == "":
 
-        st.error("Please enter collector name.")
+        st.error(
+            "Please enter collector name."
+        )
+
         st.stop()
 
 
     if locality == "":
 
-        st.error("Please enter locality.")
+        st.error(
+            "Please enter locality."
+        )
+
         st.stop()
 
 
     if selected_species is None and new_species_name == "":
 
-        st.error("Please select or enter a species.")
+        st.error(
+            "Please select or enter a species."
+        )
+
         st.stop()
     # ==========================================
     # CAS 1 : NOUVELLE ESPECE
@@ -1242,6 +1378,7 @@ if st.button("💾 Save observation"):
         remarks,
         dbh,
         height,
+        projectID,
         designID,
         samplingUnitID,
         transectPointID,
@@ -1251,7 +1388,7 @@ if st.button("💾 Save observation"):
         transectID
 )
 
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
 
         (
@@ -1274,6 +1411,7 @@ if st.button("💾 Save observation"):
         remarks,
         dbh,
         height,
+        projectID,
         designID,
         samplingUnitID,
         transectPointID,

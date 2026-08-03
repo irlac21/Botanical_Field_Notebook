@@ -7,31 +7,141 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import MarkerCluster
 
+from streamlit_searchbox import st_searchbox
+
 # ==========================
 # DATABASE
 # ==========================
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
+
 DB_FILE = PROJECT_DIR / "Database" / "botanical.db"
 
-conn = sqlite3.connect(DB_FILE)
 
-query = """
+if not DB_FILE.exists():
+
+    st.error(
+        f"Database not found: {DB_FILE}"
+    )
+
+    st.stop()
+
+
+
+conn = sqlite3.connect(
+    str(DB_FILE)
+)
+
+
+
+# ==========================
+# LOAD PROJECTS
+# ==========================
+
+projects = pd.read_sql(
+    """
+    SELECT *
+    FROM projects
+    WHERE deleted = 0
+    """,
+    conn
+)
+
+
+
+# ==========================
+# PROJECT SELECTION
+# ==========================
+
+active_projects = projects[
+    projects["deleted"] == 0
+]
+
+
+if active_projects.empty:
+
+    st.warning(
+        "No active projects available."
+    )
+
+    st.stop()
+
+
+
+project_list = (
+    active_projects["project_name"]
+    .sort_values()
+    .tolist()
+)
+
+
+
+selected_project = st.sidebar.selectbox(
+    "📁 Project",
+    project_list
+)
+
+
+
+selected_project_id = active_projects[
+    active_projects["project_name"] == selected_project
+]["project_id"].iloc[0]
+
+
+
+# ==========================
+# LOAD PROJECT OBSERVATIONS
+# ==========================
+
+# Toutes les observations du projet
+project_query = """
+
 SELECT
+
     f.species,
     f.observer,
     f.date,
     f.latitude,
     f.longitude,
+    f.projectID,
     s.establishmentMeans
+
 FROM field_notes f
+
 LEFT JOIN species s
-ON f.species = s.species
-WHERE f.latitude IS NOT NULL
-AND f.longitude IS NOT NULL
+
+ON f.taxonID = s.taxonID
+
+WHERE f.projectID = ?
+
+AND f.deleted = 0
+
 """
 
-df = pd.read_sql(query, conn)
+
+project_df = pd.read_sql(
+    project_query,
+    conn,
+    params=(
+        int(selected_project_id),
+    )
+)
+
+
+
+# Données utilisées uniquement pour la carte
+df = project_df.dropna(
+    subset=["latitude", "longitude"]
+).copy()
+
+
+df = df[
+    (df["latitude"] != 0)
+    &
+    (df["longitude"] != 0)
+]
+
+
 
 conn.close()
 # ==========================
@@ -40,40 +150,117 @@ conn.close()
 
 st.title("🗺️ Observation Map")
 
-if df.empty:
-    st.warning("No observations found.")
+if project_df.empty:
+
+    st.warning(
+        "No observations found for this project."
+    )
+
     st.stop()
 
-# supprimer les coordonnées nulles
-df = df.dropna(subset=["latitude", "longitude"])
-
-df = df[
-    (df.latitude != 0) &
-    (df.longitude != 0)
-]
 
 if df.empty:
-    st.warning("No observations with GPS coordinates.")
+
+    st.warning(
+        "No observations with GPS coordinates."
+    )
+
     st.stop()
 
 # ==========================
 # FILTERS
 # ==========================
 
-st.sidebar.header("Filters")
+st.sidebar.header("🔎 Filter")
 
-species_list = ["All"] + sorted(df["species"].dropna().unique().tolist())
 
-selected_species = st.sidebar.selectbox(
-    "Species",
-    species_list
+# Choix du type de filtre
+filter_type = st.sidebar.selectbox(
+    "Filter by:",
+    [
+        "Species",
+        "Establishment means",
+        "Observer"
+    ]
 )
 
-if selected_species != "All":
-    df = df[df["species"] == selected_species]
-if df.empty:
-    st.warning("No observations match the selected filter.")
-    st.stop()
+
+
+# ==========================
+# SPECIES FILTER
+# ==========================
+
+if filter_type == "Species":
+
+    species_list = sorted(
+        project_df["species"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+
+    selected_species = st.sidebar.selectbox(
+        "Select species",
+        species_list
+    )
+
+
+    df = df[
+        df["species"] == selected_species
+    ]
+
+
+
+# ==========================
+# ESTABLISHMENT MEANS FILTER
+# ==========================
+
+elif filter_type == "Establishment means":
+
+    establishment_list = sorted(
+        project_df["establishmentMeans"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+
+    selected_establishment = st.sidebar.selectbox(
+        "Select establishment means",
+        establishment_list
+    )
+
+
+    df = df[
+        df["establishmentMeans"] == selected_establishment
+    ]
+
+
+
+# ==========================
+# OBSERVER FILTER
+# ==========================
+
+elif filter_type == "Observer":
+
+    observers = sorted(
+        project_df["observer"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+
+    selected_observer = st.sidebar.selectbox(
+        "Select observer",
+        observers
+    )
+
+
+    df = df[
+        df["observer"] == selected_observer
+    ]
 
 # ==========================
 # MAP
