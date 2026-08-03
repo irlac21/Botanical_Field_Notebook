@@ -11,7 +11,7 @@ from folium.plugins import MarkerCluster
 # DATABASE
 # ==========================
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 DB_FILE = PROJECT_DIR / "Database" / "botanical.db"
 
 conn = sqlite3.connect(DB_FILE)
