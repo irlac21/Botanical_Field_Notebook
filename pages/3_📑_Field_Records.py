@@ -8,7 +8,7 @@ from pathlib import Path
 # DATABASE
 # =====================================================
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 DB_FILE = PROJECT_DIR / "Database" / "botanical.db"
 
