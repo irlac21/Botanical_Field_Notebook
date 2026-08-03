@@ -8,7 +8,7 @@ import streamlit as st
 # CHEMINS DU PROJET
 # ==========================================================
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent
 
 DATABASE_DIR = PROJECT_DIR / "Database"
 
@@ -29,6 +29,10 @@ BACKGROUND_IMAGE = IMAGE_DIR / "bk.jpg"
 
 @st.cache_data
 def load_database():
+
+    if not DATABASE_FILE.exists():
+        st.error(f"Database file not found: {DATABASE_FILE}")
+        st.stop()
 
     return pd.read_excel(DATABASE_FILE)
 
