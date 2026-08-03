@@ -1,0 +1,208 @@
+/* ==========================================================
+   Botanical Field Notebook - Dark Theme
+========================================================== */
+
+
+/* ==========================================================
+   BACKGROUND GENERAL
+========================================================== */
+
+.stApp {
+
+    background-color: #0b0b0b;
+
+}
+
+
+/* ==========================================================
+   TEXTES GENERAUX
+========================================================== */
+
+p,
+label,
+span,
+.stMarkdown,
+.stText,
+li {
+
+    color: white !important;
+
+    font-family: "Segoe UI", Arial, sans-serif;
+
+}
+
+
+/* ==========================================================
+   TITRES
+========================================================== */
+
+h1,
+h2,
+h3 {
+
+    color: white !important;
+
+    text-shadow: 2px 2px 8px black;
+
+}
+
+
+
+/* ==========================================================
+   CARTES TRANSPARENTES
+========================================================== */
+
+.glass-card {
+
+    background: rgba(0,0,0,0.45);
+
+    border: 1px solid rgba(255,255,255,0.25);
+
+    border-radius: 15px;
+
+    padding: 20px;
+
+    margin-bottom: 15px;
+
+    backdrop-filter: blur(10px);
+
+}
+
+
+
+/* ==========================================================
+   METRICS
+========================================================== */
+
+div[data-testid="stMetric"] {
+
+    background: rgba(0,0,0,0.45);
+
+    border-radius:15px;
+
+    border:1px solid rgba(255,255,255,.25);
+
+    padding:15px;
+
+}
+
+
+
+[data-testid="stMetricValue"] {
+
+    color:white !important;
+
+}
+
+
+[data-testid="stMetricLabel"] {
+
+    color:white !important;
+
+}
+
+
+
+/* ==========================================================
+   EXPANDERS
+========================================================== */
+
+details {
+
+    background:rgba(0,0,0,.45);
+
+    border-radius:12px;
+
+    border:1px solid rgba(255,255,255,.25);
+
+    margin-bottom:10px;
+
+    padding:10px;
+
+}
+
+
+details p {
+
+    color:white !important;
+
+}
+
+
+
+/* ==========================================================
+   BOUTONS
+========================================================== */
+
+.stButton > button {
+
+    width:100%;
+
+    border-radius:12px;
+
+    height:55px;
+
+    border:none;
+
+    background:#2d6a4f;
+
+    color:white !important;
+
+    font-weight:bold;
+
+}
+
+
+.stButton > button:hover {
+
+    background:#1b4332;
+
+}
+
+
+
+/* ==========================================================
+   CHAMPS
+========================================================== */
+
+.stTextInput input,
+.stSelectbox input {
+
+    color:white !important;
+
+    background:#222222;
+
+    border-radius:12px;
+
+}
+
+
+
+/* ==========================================================
+   SIDEBAR
+========================================================== */
+
+section[data-testid="stSidebar"] {
+
+    background:#111111;
+
+}
+
+
+section[data-testid="stSidebar"] * {
+
+    color:white !important;
+
+}
+
+
+
+/* ==========================================================
+   TABLEAUX
+========================================================== */
+
+[data-testid="stDataFrame"] {
+
+    color:white;
+
+}
